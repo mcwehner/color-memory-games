@@ -369,12 +369,43 @@
     text-transform: uppercase;
   }
 
+  /* ---- Touch ---- */
+  .chroma-wrap,
+  .lightness-wrap {
+    touch-action: none;
+    user-select: none;
+  }
+
   /* ---- Responsive ---- */
   @media (max-width: 700px) {
-    .game-wrap { padding: 20px 16px 40px; }
+    header { padding: 24px 0 0; }
+    header h1 { font-size: 26px; }
+    .game-wrap { padding: 16px 16px 32px; }
+
     .game-area, .pick-area, .result-area { flex-direction: column; }
-    .color-panel, .picker-side, .chosen-side, .result-card { min-height: 260px; }
-    .result-swatch { min-height: 180px; }
+    .game-area { margin-top: 14px; }
+
+    /* Memorize: fill most of the viewport */
+    .color-panel { min-height: 60vh; }
+
+    /* Pick: prevent picker from growing unbounded */
+    .pick-area { gap: 16px; margin-top: 14px; }
+    .picker-side { flex: none; min-height: auto; }
+    /* Row height = available chroma width so the canvas is square */
+    .picker-canvas-row { gap: 10px; height: calc(100vw - 82px); flex: none; }
+    .lightness-wrap { width: 40px; } /* wider for touch */
+    .chosen-side { flex: none; min-height: auto; width: 100%; }
+    .chosen-swatch { min-height: 120px; }
+
+    /* Result */
+    .result-area { gap: 16px; margin-top: 14px; }
+    .result-card { min-height: auto; }
+    .result-swatch { min-height: 160px; }
+    .score-block { margin-top: 20px; }
+    .score-number { font-size: 48px; }
+    .result-actions { margin-top: 20px; }
+
+    .pick-actions { margin-top: 16px; }
   }
 </style>
 </head>
