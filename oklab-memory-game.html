@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OKLab Color Memory</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e10;
+    --surface: #1a1a1e;
+    --surface2: #242428;
+    --border: #2e2e34;
+    --text: #e8e6e3;
+    --text-dim: #706e76;
+    --accent: #c4a882;
+    --radius: 10px;
+  }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    padding: 36px 0 0;
+    text-align: center;
+  }
+
+  header h1 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 32px;
+    letter-spacing: -0.5px;
+  }
+
+  header p {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ---- Layout ---- */
+  .game-wrap {
+    width: 100%;
+    max-width: 860px;
+    padding: 28px 32px 48px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ---- Phases ---- */
+  .phase { display: none; width: 100%; }
+  .phase.active { display: flex; flex-direction: column; align-items: center; }
+
+  /* ---- START ---- */
+  #phaseStart { justify-content: center; min-height: 420px; }
+
+  .start-desc {
+    text-align: center;
+    max-width: 380px;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.7;
+    margin-bottom: 36px;
+  }
+
+  /* Buttons */
+  .btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 14px 36px;
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn:hover { background: var(--surface2); border-color: var(--text-dim); }
+
+  .btn.primary {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+
+  .btn.primary:hover { background: #d0cec9; }
+
+  /* ---- MEMORIZE ---- */
+  #phaseMemorize { align-items: center; }
+
+  .game-area {
+    width: 100%;
+    display: flex;
+    gap: 24px;
+    align-items: stretch;
+    margin-top: 20px;
+  }
+
+  .color-panel {
+    flex: 1;
+    min-height: 400px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    transition: background-color 0.001s;
+  }
+
+  .countdown-badge {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.35);
+    background: rgba(0,0,0,0.18);
+    padding: 4px 14px;
+    border-radius: 20px;
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- PICK ---- */
+  #phasePick { align-items: center; }
+
+  .pick-area {
+    width: 100%;
+    display: flex;
+    gap: 24px;
+    align-items: stretch;
+    margin-top: 20px;
+  }
+
+  .picker-side {
+    flex: 1;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .picker-canvas-row {
+    display: flex;
+    gap: 12px;
+    flex: 1;
+  }
+
+  .chroma-wrap {
+    flex: 1;
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: crosshair;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .chroma-wrap canvas { width: 100%; height: 100%; display: block; }
+
+  .chroma-cursor {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2.5px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.45);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+  }
+
+  .lightness-wrap {
+    width: 28px;
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: ns-resize;
+    border: 1px solid var(--border);
+  }
+
+  .lightness-wrap canvas { width: 100%; height: 100%; display: block; }
+
+  .lightness-cursor {
+    position: absolute;
+    left: -3px; right: -3px;
+    height: 5px;
+    border-radius: 3px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.45);
+    pointer-events: none;
+    transform: translateY(-50%);
+    z-index: 2;
+  }
+
+  .chosen-side {
+    flex: 1;
+    min-height: 400px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .chosen-swatch {
+    flex: 1;
+    transition: background-color 0.05s;
+  }
+
+  .chosen-footer {
+    background: var(--surface);
+    padding: 14px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--border);
+  }
+
+  .chosen-footer .label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .chosen-footer .hex-val {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+
+  .pick-actions {
+    margin-top: 20px;
+  }
+
+  .pick-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 20px;
+  }
+
+  /* ---- RESULT ---- */
+  #phaseResult { align-items: center; }
+
+  .result-area {
+    width: 100%;
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+  }
+
+  .result-card {
+    flex: 1;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .result-swatch {
+    min-height: 260px;
+  }
+
+  .result-info {
+    background: var(--surface);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  .result-info .card-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  .result-info .card-hex {
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .result-info .card-oklab {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .score-block {
+    margin-top: 28px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .score-number {
+    font-family: 'Instrument Serif', serif;
+    font-size: 64px;
+    font-weight: 400;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+
+  .score-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .score-detail {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .score-grade {
+    font-size: 13px;
+    margin-top: 6px;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+
+  .result-actions {
+    margin-top: 28px;
+    display: flex;
+    gap: 12px;
+  }
+
+  /* ---- Phase labels ---- */
+  .phase-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 700px) {
+    .game-wrap { padding: 20px 16px 40px; }
+    .game-area, .pick-area, .result-area { flex-direction: column; }
+    .color-panel, .picker-side, .chosen-side, .result-card { min-height: 260px; }
+    .result-swatch { min-height: 180px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Color Memory</h1>
+  <p>OKLab perceptual challenge</p>
+</header>
+
+<div class="game-wrap">
+
+  <!-- START -->
+  <div class="phase active" id="phaseStart">
+    <p class="start-desc">
+      A color will appear for five seconds. Memorize it, then try to recreate it from memory using the picker. Your score is based on perceptual distance in OKLab space.
+    </p>
+    <button class="btn primary" id="btnStart">Begin</button>
+  </div>
+
+  <!-- MEMORIZE -->
+  <div class="phase" id="phaseMemorize">
+    <span class="phase-label">Memorize this color</span>
+    <div class="game-area">
+      <div class="color-panel" id="memorizePanel">
+        <span class="countdown-badge" id="countdown">5.0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PICK -->
+  <div class="phase" id="phasePick">
+    <span class="phase-label">Recreate the color</span>
+    <div class="pick-area">
+      <div class="picker-side">
+        <div class="picker-canvas-row">
+          <div class="chroma-wrap" id="chromaWrap">
+            <canvas id="chromaCanvas"></canvas>
+            <div class="chroma-cursor" id="chromaCursor"></div>
+          </div>
+          <div class="lightness-wrap" id="lightnessWrap">
+            <canvas id="lightnessCanvas"></canvas>
+            <div class="lightness-cursor" id="lightnessCursor"></div>
+          </div>
+        </div>
+      </div>
+      <div class="chosen-side">
+        <div class="chosen-swatch" id="chosenSwatch"></div>
+        <div class="chosen-footer">
+          <span class="label">Your pick</span>
+          <span class="hex-val" id="chosenHex">#000000</span>
+        </div>
+      </div>
+    </div>
+    <button class="btn primary pick-actions" id="btnSubmit">Lock In</button>
+  </div>
+
+  <!-- RESULT -->
+  <div class="phase" id="phaseResult">
+    <span class="phase-label">Results</span>
+    <div class="result-area">
+      <div class="result-card">
+        <div class="result-swatch" id="resultOrigSwatch"></div>
+        <div class="result-info">
+          <span class="card-label">Original</span>
+          <span class="card-hex" id="resultOrigHex"></span>
+          <span class="card-oklab" id="resultOrigOklab"></span>
+        </div>
+      </div>
+      <div class="result-card">
+        <div class="result-swatch" id="resultPickSwatch"></div>
+        <div class="result-info">
+          <span class="card-label">Your pick</span>
+          <span class="card-hex" id="resultPickHex"></span>
+          <span class="card-oklab" id="resultPickOklab"></span>
+        </div>
+      </div>
+    </div>
+    <div class="score-block">
+      <div class="score-number" id="scoreNumber">0</div>
+      <span class="score-label">Score</span>
+      <span class="score-detail" id="scoreDetail"></span>
+      <span class="score-grade" id="scoreGrade"></span>
+    </div>
+    <div class="result-actions">
+      <button class="btn primary" id="btnAgain">Play Again</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ===================== OKLab Math =====================
+
+function oklabToLinearSrgb(L, a, b) {
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+  return [
+    +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+  ];
+}
+
+function linearToSrgb(c) {
+  return c >= 0.0031308 ? 1.055 * Math.pow(c, 1 / 2.4) - 0.055 : 12.92 * c;
+}
+
+function srgbToLinear(c) {
+  return c >= 0.04045 ? Math.pow((c + 0.055) / 1.055, 2.4) : c / 12.92;
+}
+
+function linearSrgbToOklab(r, g, b) {
+  const l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+  const m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+  const s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+  const l_ = Math.cbrt(l), m_ = Math.cbrt(m), s_ = Math.cbrt(s);
+  return [
+    0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+    1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+    0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+  ];
+}
+
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+function isInGamut(r, g, b) {
+  return r >= -0.002 && r <= 1.002 && g >= -0.002 && g <= 1.002 && b >= -0.002 && b <= 1.002;
+}
+
+function oklabToRgb255(L, a, b) {
+  const [lr, lg, lb] = oklabToLinearSrgb(L, a, b);
+  return [Math.round(clamp01(linearToSrgb(lr)) * 255),
+          Math.round(clamp01(linearToSrgb(lg)) * 255),
+          Math.round(clamp01(linearToSrgb(lb)) * 255)];
+}
+
+function rgb255ToOklab(r, g, b) {
+  return linearSrgbToOklab(srgbToLinear(r / 255), srgbToLinear(g / 255), srgbToLinear(b / 255));
+}
+
+function toHex(r, g, b) {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+function oklabToHex(L, a, b) {
+  const [r, g, bl] = oklabToRgb255(L, a, b);
+  return toHex(r, g, bl);
+}
+
+// ===================== Random In-Gamut OKLab Color =====================
+
+function randomOklabInGamut() {
+  // Generate random colors biased toward interesting, saturated mid-tones
+  for (let i = 0; i < 500; i++) {
+    const L = 0.25 + Math.random() * 0.55; // avoid near-black/white extremes
+    const a = (Math.random() * 0.6) - 0.3;
+    const b = (Math.random() * 0.6) - 0.3;
+    const [lr, lg, lb] = oklabToLinearSrgb(L, a, b);
+    if (isInGamut(lr, lg, lb)) {
+      return { L, a, b };
+    }
+  }
+  return { L: 0.5, a: 0, b: 0 }; // fallback grey
+}
+
+// Random starting position that is different from target
+function randomPickerStart(target) {
+  let c;
+  do {
+    c = randomOklabInGamut();
+  } while (oklabDist(c, target) < 0.15);
+  return c;
+}
+
+function oklabDist(c1, c2) {
+  const dL = c1.L - c2.L, da = c1.a - c2.a, db = c1.b - c2.b;
+  return Math.sqrt(dL * dL + da * da + db * db);
+}
+
+// ===================== State =====================
+
+let targetColor = null;  // { L, a, b }
+let pickedColor = { L: 0.5, a: 0, b: 0 };
+let countdownTimer = null;
+
+// ===================== DOM =====================
+
+const phases = {
+  start:    document.getElementById('phaseStart'),
+  memorize: document.getElementById('phaseMemorize'),
+  pick:     document.getElementById('phasePick'),
+  result:   document.getElementById('phaseResult'),
+};
+
+function showPhase(name) {
+  Object.values(phases).forEach(p => p.classList.remove('active'));
+  phases[name].classList.add('active');
+}
+
+const memorizePanel = document.getElementById('memorizePanel');
+const countdown     = document.getElementById('countdown');
+
+const chromaCanvas  = document.getElementById('chromaCanvas');
+const chromaCtx     = chromaCanvas.getContext('2d');
+const chromaWrap    = document.getElementById('chromaWrap');
+const chromaCursor  = document.getElementById('chromaCursor');
+
+const lightnessCanvas = document.getElementById('lightnessCanvas');
+const lightnessCtx    = lightnessCanvas.getContext('2d');
+const lightnessWrap   = document.getElementById('lightnessWrap');
+const lightnessCursor = document.getElementById('lightnessCursor');
+
+const chosenSwatch  = document.getElementById('chosenSwatch');
+const chosenHex     = document.getElementById('chosenHex');
+
+const CANVAS_SIZE = 512;
+const LSTRIP_W = 28;
+const LSTRIP_H = 512;
+const A_RANGE = [-0.35, 0.35];
+const B_RANGE = [-0.35, 0.35];
+
+function initCanvases() {
+  chromaCanvas.width = CANVAS_SIZE;
+  chromaCanvas.height = CANVAS_SIZE;
+  lightnessCanvas.width = LSTRIP_W;
+  lightnessCanvas.height = LSTRIP_H;
+}
+
+// ===================== Picker Rendering =====================
+
+function drawChromaPlane() {
+  const img = chromaCtx.createImageData(CANVAS_SIZE, CANVAS_SIZE);
+  const d = img.data;
+  const L = pickedColor.L;
+  for (let y = 0; y < CANVAS_SIZE; y++) {
+    const b = B_RANGE[1] - (y / (CANVAS_SIZE - 1)) * (B_RANGE[1] - B_RANGE[0]);
+    for (let x = 0; x < CANVAS_SIZE; x++) {
+      const a = A_RANGE[0] + (x / (CANVAS_SIZE - 1)) * (A_RANGE[1] - A_RANGE[0]);
+      const [sr, sg, sb] = oklabToLinearSrgb(L, a, b);
+      const idx = (y * CANVAS_SIZE + x) * 4;
+      if (isInGamut(sr, sg, sb)) {
+        d[idx]     = Math.round(clamp01(linearToSrgb(sr)) * 255);
+        d[idx + 1] = Math.round(clamp01(linearToSrgb(sg)) * 255);
+        d[idx + 2] = Math.round(clamp01(linearToSrgb(sb)) * 255);
+        d[idx + 3] = 255;
+      } else {
+        const ck = ((Math.floor(x / 5) + Math.floor(y / 5)) % 2 === 0);
+        const v = ck ? 20 : 16;
+        d[idx] = v; d[idx + 1] = v; d[idx + 2] = v; d[idx + 3] = 255;
+      }
+    }
+  }
+  chromaCtx.putImageData(img, 0, 0);
+}
+
+function drawLightnessStrip() {
+  const img = lightnessCtx.createImageData(LSTRIP_W, LSTRIP_H);
+  const d = img.data;
+  const { a, b } = pickedColor;
+  for (let y = 0; y < LSTRIP_H; y++) {
+    const L = 1.0 - y / (LSTRIP_H - 1);
+    const [sr, sg, sb] = oklabToLinearSrgb(L, a, b);
+    const inG = isInGamut(sr, sg, sb);
+    for (let x = 0; x < LSTRIP_W; x++) {
+      const idx = (y * LSTRIP_W + x) * 4;
+      if (inG) {
+        d[idx]     = Math.round(clamp01(linearToSrgb(sr)) * 255);
+        d[idx + 1] = Math.round(clamp01(linearToSrgb(sg)) * 255);
+        d[idx + 2] = Math.round(clamp01(linearToSrgb(sb)) * 255);
+      } else {
+        const ck = ((Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0);
+        const v = ck ? 20 : 16;
+        d[idx] = v; d[idx + 1] = v; d[idx + 2] = v;
+      }
+      d[idx + 3] = 255;
+    }
+  }
+  lightnessCtx.putImageData(img, 0, 0);
+}
+
+function updatePicker(source) {
+  const hex = oklabToHex(pickedColor.L, pickedColor.a, pickedColor.b);
+  chosenSwatch.style.backgroundColor = hex;
+  chosenHex.textContent = hex;
+
+  // Cursors
+  const xPct = (pickedColor.a - A_RANGE[0]) / (A_RANGE[1] - A_RANGE[0]);
+  const yPct = 1 - (pickedColor.b - B_RANGE[0]) / (B_RANGE[1] - B_RANGE[0]);
+  chromaCursor.style.left = `${xPct * 100}%`;
+  chromaCursor.style.top = `${yPct * 100}%`;
+  lightnessCursor.style.top = `${(1 - pickedColor.L) * 100}%`;
+
+  if (source === 'lightness' || source === 'init') drawChromaPlane();
+  if (source !== 'lightness') drawLightnessStrip();
+  if (source === 'chroma') drawLightnessStrip();
+}
+
+// ===================== Picker Interaction =====================
+
+function chromaFromEvent(e) {
+  const rect = chromaWrap.getBoundingClientRect();
+  const x = clamp01((e.clientX - rect.left) / rect.width);
+  const y = clamp01((e.clientY - rect.top) / rect.height);
+  pickedColor.a = A_RANGE[0] + x * (A_RANGE[1] - A_RANGE[0]);
+  pickedColor.b = B_RANGE[1] - y * (B_RANGE[1] - B_RANGE[0]);
+  updatePicker('chroma');
+}
+
+let chromaDrag = false;
+chromaWrap.addEventListener('pointerdown', e => { chromaDrag = true; chromaWrap.setPointerCapture(e.pointerId); chromaFromEvent(e); });
+chromaWrap.addEventListener('pointermove', e => { if (chromaDrag) chromaFromEvent(e); });
+chromaWrap.addEventListener('pointerup', () => chromaDrag = false);
+
+function lightnessFromEvent(e) {
+  const rect = lightnessWrap.getBoundingClientRect();
+  const y = clamp01((e.clientY - rect.top) / rect.height);
+  pickedColor.L = 1 - y;
+  updatePicker('lightness');
+}
+
+let lDrag = false;
+lightnessWrap.addEventListener('pointerdown', e => { lDrag = true; lightnessWrap.setPointerCapture(e.pointerId); lightnessFromEvent(e); });
+lightnessWrap.addEventListener('pointermove', e => { if (lDrag) lightnessFromEvent(e); });
+lightnessWrap.addEventListener('pointerup', () => lDrag = false);
+
+// ===================== Game Flow =====================
+
+document.getElementById('btnStart').addEventListener('click', startRound);
+document.getElementById('btnSubmit').addEventListener('click', submitPick);
+document.getElementById('btnAgain').addEventListener('click', startRound);
+
+function startRound() {
+  // Pick random target
+  targetColor = randomOklabInGamut();
+  const hex = oklabToHex(targetColor.L, targetColor.a, targetColor.b);
+
+  // Show memorize phase
+  memorizePanel.style.backgroundColor = hex;
+  showPhase('memorize');
+
+  // Countdown
+  let remaining = 5.0;
+  countdown.textContent = '5.0';
+
+  countdownTimer = setInterval(() => {
+    remaining -= 0.1;
+    if (remaining <= 0) {
+      clearInterval(countdownTimer);
+      startPicking();
+    } else {
+      countdown.textContent = remaining.toFixed(1);
+    }
+  }, 100);
+}
+
+function startPicking() {
+  // Set picker to a random color far from target
+  const start = randomPickerStart(targetColor);
+  pickedColor.L = start.L;
+  pickedColor.a = start.a;
+  pickedColor.b = start.b;
+
+  initCanvases();
+  showPhase('pick');
+  updatePicker('init');
+}
+
+function submitPick() {
+  // Calculate score
+  const dist = oklabDist(targetColor, pickedColor);
+
+  // Max realistic distance in OKLab is ~0.5 for in-gamut colors
+  // Score: 100 at dist=0, dropping to 0 around dist=0.5
+  const maxDist = 0.5;
+  const raw = Math.max(0, 1 - dist / maxDist);
+  const score = Math.round(raw * 100);
+
+  // Fill result
+  const origHex = oklabToHex(targetColor.L, targetColor.a, targetColor.b);
+  const pickHex = oklabToHex(pickedColor.L, pickedColor.a, pickedColor.b);
+
+  document.getElementById('resultOrigSwatch').style.backgroundColor = origHex;
+  document.getElementById('resultOrigHex').textContent = origHex;
+  document.getElementById('resultOrigOklab').textContent =
+    `L ${targetColor.L.toFixed(3)}  a ${targetColor.a.toFixed(3)}  b ${targetColor.b.toFixed(3)}`;
+
+  document.getElementById('resultPickSwatch').style.backgroundColor = pickHex;
+  document.getElementById('resultPickHex').textContent = pickHex;
+  document.getElementById('resultPickOklab').textContent =
+    `L ${pickedColor.L.toFixed(3)}  a ${pickedColor.a.toFixed(3)}  b ${pickedColor.b.toFixed(3)}`;
+
+  document.getElementById('scoreNumber').textContent = score;
+  document.getElementById('scoreDetail').textContent = `ΔE = ${dist.toFixed(4)}`;
+
+  // Grade
+  let grade;
+  if (score >= 97)      grade = 'Supernatural';
+  else if (score >= 92) grade = 'Exceptional';
+  else if (score >= 85) grade = 'Excellent';
+  else if (score >= 75) grade = 'Very good';
+  else if (score >= 60) grade = 'Good';
+  else if (score >= 45) grade = 'Decent';
+  else if (score >= 30) grade = 'Fair';
+  else                  grade = 'Keep practicing';
+  document.getElementById('scoreGrade').textContent = grade;
+
+  showPhase('result');
+}
+
+// ===================== Init =====================
+initCanvases();
+</script>
+</body>
+</html>

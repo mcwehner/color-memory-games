@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OKLab Color Picker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e10;
+    --surface: #1a1a1e;
+    --surface2: #242428;
+    --border: #2e2e34;
+    --text: #e8e6e3;
+    --text-dim: #8a8890;
+    --accent: #c4a882;
+    --accent-dim: #8a7660;
+    --radius: 10px;
+  }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --- Grain overlay --- */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    padding: 40px 48px 0;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 38px;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+  header span {
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .app {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 48px 60px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 40px;
+    align-items: start;
+  }
+
+  /* --- Picker Area --- */
+  .picker-area {
+    display: flex;
+    gap: 20px;
+    align-items: stretch;
+  }
+
+  .chroma-plane-wrap {
+    position: relative;
+    flex: 1;
+    aspect-ratio: 1;
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: crosshair;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .chroma-plane-wrap canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .chroma-cursor {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2.5px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.5);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: box-shadow 0.15s;
+    z-index: 2;
+  }
+
+  .lightness-strip-wrap {
+    position: relative;
+    width: 36px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: ns-resize;
+    border: 1px solid var(--border);
+  }
+
+  .lightness-strip-wrap canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .lightness-cursor {
+    position: absolute;
+    left: -3px; right: -3px;
+    height: 6px;
+    border-radius: 3px;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.5);
+    pointer-events: none;
+    transform: translateY(-50%);
+    z-index: 2;
+  }
+
+  /* Axis labels */
+  .axis-label {
+    position: absolute;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .axis-label.bottom { bottom: 6px; left: 50%; transform: translateX(-50%); }
+  .axis-label.left { top: 50%; left: 8px; transform: translateY(-50%) rotate(-90deg); }
+  .axis-label.l-label { bottom: 6px; left: 50%; transform: translateX(-50%); font-size: 9px; }
+
+  /* --- Sidebar --- */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .color-preview-card {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .preview-swatch {
+    height: 140px;
+    transition: background-color 0.08s;
+    position: relative;
+  }
+
+  .preview-swatch .gamut-warning {
+    position: absolute;
+    bottom: 8px; right: 10px;
+    font-size: 10px;
+    color: rgba(0,0,0,0.6);
+    background: rgba(255,255,255,0.25);
+    padding: 2px 7px;
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+    display: none;
+  }
+
+  .preview-values {
+    background: var(--surface);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .value-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12.5px;
+  }
+
+  .value-row .label {
+    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    min-width: 50px;
+  }
+
+  .value-row .val {
+    color: var(--text);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+
+  .value-row .val:hover {
+    background: var(--surface2);
+  }
+
+  .value-row .val.copied {
+    background: var(--accent-dim);
+    color: var(--bg);
+  }
+
+  /* Sliders */
+  .slider-group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .slider-group h3 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 16px;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+
+  .slider-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .slider-header label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .slider-header .slider-val {
+    font-size: 12px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+    background: var(--surface2);
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--bg);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    cursor: grab;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--text);
+    border: 2px solid var(--bg);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    cursor: grab;
+  }
+
+  /* Harmony */
+  .harmony-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+
+  .harmony-section h3 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .harmony-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 14px;
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 2px;
+  }
+
+  .harmony-tab {
+    flex: 1;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 6px 4px;
+    border-radius: 5px;
+    cursor: pointer;
+    color: var(--text-dim);
+    transition: all 0.15s;
+    border: none;
+    background: none;
+    font-family: inherit;
+  }
+
+  .harmony-tab.active {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .harmony-swatches {
+    display: flex;
+    gap: 6px;
+  }
+
+  .harmony-swatch {
+    flex: 1;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+
+  .harmony-swatch:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 1;
+  }
+
+  /* Hex input */
+  .hex-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+  }
+
+  .hex-input-wrap .hash {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .hex-input-wrap input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    outline: none;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    header { padding: 28px 24px 0; }
+    .app {
+      grid-template-columns: 1fr;
+      padding: 24px 24px 48px;
+      gap: 28px;
+    }
+    .chroma-plane-wrap { max-height: 400px; }
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 12px;
+    padding: 8px 18px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    opacity: 0;
+    transition: all 0.25s ease;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>OKLab</h1>
+  <span>Perceptual Color Picker</span>
+</header>
+
+<div class="app">
+  <div class="picker-area">
+    <div class="chroma-plane-wrap" id="chromaWrap">
+      <canvas id="chromaCanvas"></canvas>
+      <div class="chroma-cursor" id="chromaCursor"></div>
+      <span class="axis-label bottom">a · green → red</span>
+      <span class="axis-label left">b · blue → yellow</span>
+    </div>
+    <div class="lightness-strip-wrap" id="lightnessWrap">
+      <canvas id="lightnessCanvas"></canvas>
+      <div class="lightness-cursor" id="lightnessCursor"></div>
+      <span class="axis-label l-label">L</span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="hex-input-wrap">
+      <span class="hash">#</span>
+      <input type="text" id="hexInput" maxlength="6" placeholder="RRGGBB" spellcheck="false" />
+    </div>
+
+    <div class="color-preview-card">
+      <div class="preview-swatch" id="previewSwatch">
+        <span class="gamut-warning" id="gamutWarning">out of sRGB</span>
+      </div>
+      <div class="preview-values">
+        <div class="value-row">
+          <span class="label">OKLab</span>
+          <span class="val" id="valOklab" title="Click to copy"></span>
+        </div>
+        <div class="value-row">
+          <span class="label">OKLCH</span>
+          <span class="val" id="valOklch" title="Click to copy"></span>
+        </div>
+        <div class="value-row">
+          <span class="label">sRGB</span>
+          <span class="val" id="valRgb" title="Click to copy"></span>
+        </div>
+        <div class="value-row">
+          <span class="label">CSS</span>
+          <span class="val" id="valCss" title="Click to copy"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="slider-group">
+      <h3>Components</h3>
+      <div class="slider-item">
+        <div class="slider-header">
+          <label>Lightness</label>
+          <span class="slider-val" id="sliderLVal">0.70</span>
+        </div>
+        <input type="range" id="sliderL" min="0" max="1" step="0.005" value="0.70" />
+      </div>
+      <div class="slider-item">
+        <div class="slider-header">
+          <label>a (green–red)</label>
+          <span class="slider-val" id="sliderAVal">0.000</span>
+        </div>
+        <input type="range" id="sliderA" min="-0.4" max="0.4" step="0.002" value="0" />
+      </div>
+      <div class="slider-item">
+        <div class="slider-header">
+          <label>b (blue–yellow)</label>
+          <span class="slider-val" id="sliderBVal">0.000</span>
+        </div>
+        <input type="range" id="sliderB" min="-0.4" max="0.4" step="0.002" value="0" />
+      </div>
+    </div>
+
+    <div class="harmony-section">
+      <h3>Harmonies</h3>
+      <div class="harmony-tabs">
+        <button class="harmony-tab active" data-mode="complement">Compl.</button>
+        <button class="harmony-tab" data-mode="triadic">Triadic</button>
+        <button class="harmony-tab" data-mode="analogous">Analog.</button>
+        <button class="harmony-tab" data-mode="split">Split</button>
+      </div>
+      <div class="harmony-swatches" id="harmonySwatches"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+// ===================== OKLab ↔ sRGB Conversion =====================
+
+function oklabToLinearSrgb(L, a, b) {
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+
+  const l = l_ * l_ * l_;
+  const m = m_ * m_ * m_;
+  const s = s_ * s_ * s_;
+
+  return [
+    +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+  ];
+}
+
+function linearSrgbToOklab(r, g, b) {
+  const l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+  const m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+  const s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+
+  const l_ = Math.cbrt(l);
+  const m_ = Math.cbrt(m);
+  const s_ = Math.cbrt(s);
+
+  return [
+    0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+    1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+    0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+  ];
+}
+
+function linearToSrgb(c) {
+  return c >= 0.0031308 ? 1.055 * Math.pow(c, 1 / 2.4) - 0.055 : 12.92 * c;
+}
+
+function srgbToLinear(c) {
+  return c >= 0.04045 ? Math.pow((c + 0.055) / 1.055, 2.4) : c / 12.92;
+}
+
+function oklabToSrgb(L, a, b) {
+  const [lr, lg, lb] = oklabToLinearSrgb(L, a, b);
+  return [linearToSrgb(lr), linearToSrgb(lg), linearToSrgb(lb)];
+}
+
+function srgbToOklab(r, g, b) {
+  return linearSrgbToOklab(srgbToLinear(r), srgbToLinear(g), srgbToLinear(b));
+}
+
+function isInGamut(r, g, b) {
+  return r >= -0.002 && r <= 1.002 && g >= -0.002 && g <= 1.002 && b >= -0.002 && b <= 1.002;
+}
+
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+function oklabToClampedRgb255(L, a, b) {
+  const [r, g, bl] = oklabToSrgb(L, a, b);
+  return [Math.round(clamp01(r) * 255), Math.round(clamp01(g) * 255), Math.round(clamp01(bl) * 255)];
+}
+
+function oklabToOklch(L, a, b) {
+  const C = Math.sqrt(a * a + b * b);
+  let h = Math.atan2(b, a) * 180 / Math.PI;
+  if (h < 0) h += 360;
+  return [L, C, h];
+}
+
+function oklchToOklab(L, C, h) {
+  const hRad = h * Math.PI / 180;
+  return [L, C * Math.cos(hRad), C * Math.sin(hRad)];
+}
+
+function rgbToHex(r, g, b) {
+  return [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+function hexToRgb(hex) {
+  hex = hex.replace(/^#/, '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  if (hex.length !== 6) return null;
+  const n = parseInt(hex, 16);
+  if (isNaN(n)) return null;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// ===================== State =====================
+
+const state = { L: 0.70, a: 0.05, b: 0.12 };
+let harmonyMode = 'complement';
+let suppressHexUpdate = false;
+
+// ===================== DOM =====================
+
+const chromaCanvas = document.getElementById('chromaCanvas');
+const chromaCtx = chromaCanvas.getContext('2d');
+const chromaWrap = document.getElementById('chromaWrap');
+const chromaCursor = document.getElementById('chromaCursor');
+
+const lightnessCanvas = document.getElementById('lightnessCanvas');
+const lightnessCtx = lightnessCanvas.getContext('2d');
+const lightnessWrap = document.getElementById('lightnessWrap');
+const lightnessCursor = document.getElementById('lightnessCursor');
+
+const previewSwatch = document.getElementById('previewSwatch');
+const gamutWarning = document.getElementById('gamutWarning');
+const valOklab = document.getElementById('valOklab');
+const valOklch = document.getElementById('valOklch');
+const valRgb = document.getElementById('valRgb');
+const valCss = document.getElementById('valCss');
+
+const sliderL = document.getElementById('sliderL');
+const sliderA = document.getElementById('sliderA');
+const sliderB = document.getElementById('sliderB');
+const sliderLVal = document.getElementById('sliderLVal');
+const sliderAVal = document.getElementById('sliderAVal');
+const sliderBVal = document.getElementById('sliderBVal');
+
+const hexInput = document.getElementById('hexInput');
+const harmonySwatches = document.getElementById('harmonySwatches');
+const toast = document.getElementById('toast');
+
+// ===================== Rendering =====================
+
+const CHROMA_SIZE = 512;
+const LIGHTNESS_H = 512;
+const LIGHTNESS_W = 36;
+const A_RANGE = [-0.4, 0.4];
+const B_RANGE = [-0.4, 0.4];
+
+function initCanvases() {
+  chromaCanvas.width = CHROMA_SIZE;
+  chromaCanvas.height = CHROMA_SIZE;
+  lightnessCanvas.width = LIGHTNESS_W;
+  lightnessCanvas.height = LIGHTNESS_H;
+}
+
+function drawChromaPlane() {
+  const img = chromaCtx.createImageData(CHROMA_SIZE, CHROMA_SIZE);
+  const d = img.data;
+  const L = state.L;
+
+  for (let y = 0; y < CHROMA_SIZE; y++) {
+    const b = B_RANGE[1] - (y / (CHROMA_SIZE - 1)) * (B_RANGE[1] - B_RANGE[0]);
+    for (let x = 0; x < CHROMA_SIZE; x++) {
+      const a = A_RANGE[0] + (x / (CHROMA_SIZE - 1)) * (A_RANGE[1] - A_RANGE[0]);
+      const [sr, sg, sb] = oklabToSrgb(L, a, b);
+      const idx = (y * CHROMA_SIZE + x) * 4;
+
+      if (isInGamut(sr, sg, sb)) {
+        d[idx]     = Math.round(clamp01(sr) * 255);
+        d[idx + 1] = Math.round(clamp01(sg) * 255);
+        d[idx + 2] = Math.round(clamp01(sb) * 255);
+        d[idx + 3] = 255;
+      } else {
+        // Show out-of-gamut as dark checkerboard
+        const check = ((Math.floor(x / 6) + Math.floor(y / 6)) % 2 === 0);
+        const v = check ? 20 : 16;
+        d[idx] = v; d[idx + 1] = v; d[idx + 2] = v; d[idx + 3] = 255;
+      }
+    }
+  }
+  chromaCtx.putImageData(img, 0, 0);
+}
+
+function drawLightnessStrip() {
+  const img = lightnessCtx.createImageData(LIGHTNESS_W, LIGHTNESS_H);
+  const d = img.data;
+  const { a, b } = state;
+
+  for (let y = 0; y < LIGHTNESS_H; y++) {
+    const L = 1.0 - y / (LIGHTNESS_H - 1);
+    const [sr, sg, sb] = oklabToSrgb(L, a, b);
+    const inG = isInGamut(sr, sg, sb);
+    for (let x = 0; x < LIGHTNESS_W; x++) {
+      const idx = (y * LIGHTNESS_W + x) * 4;
+      if (inG) {
+        d[idx]     = Math.round(clamp01(sr) * 255);
+        d[idx + 1] = Math.round(clamp01(sg) * 255);
+        d[idx + 2] = Math.round(clamp01(sb) * 255);
+      } else {
+        const check = ((Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0);
+        const v = check ? 20 : 16;
+        d[idx] = v; d[idx + 1] = v; d[idx + 2] = v;
+      }
+      d[idx + 3] = 255;
+    }
+  }
+  lightnessCtx.putImageData(img, 0, 0);
+}
+
+// ===================== UI Update =====================
+
+function updateAll(source) {
+  const { L, a, b } = state;
+  const [sr, sg, sb] = oklabToSrgb(L, a, b);
+  const inGamut = isInGamut(sr, sg, sb);
+  const [r255, g255, b255] = oklabToClampedRgb255(L, a, b);
+  const hex = rgbToHex(r255, g255, b255);
+  const [oL, oC, oH] = oklabToOklch(L, a, b);
+
+  // Preview
+  previewSwatch.style.backgroundColor = `#${hex}`;
+  gamutWarning.style.display = inGamut ? 'none' : 'block';
+
+  // Values
+  valOklab.textContent = `oklab(${L.toFixed(3)}, ${a.toFixed(3)}, ${b.toFixed(3)})`;
+  valOklch.textContent = `oklch(${oL.toFixed(3)}, ${oC.toFixed(3)}, ${oH.toFixed(1)}°)`;
+  valRgb.textContent = `rgb(${r255}, ${g255}, ${b255})`;
+  valCss.textContent = `#${hex}`;
+
+  // Hex input
+  if (source !== 'hex' && !suppressHexUpdate) {
+    hexInput.value = hex;
+  }
+
+  // Sliders
+  if (source !== 'slider') {
+    sliderL.value = L;
+    sliderA.value = a;
+    sliderB.value = b;
+  }
+  sliderLVal.textContent = L.toFixed(3);
+  sliderAVal.textContent = a >= 0 ? `+${a.toFixed(3)}` : a.toFixed(3);
+  sliderBVal.textContent = b >= 0 ? `+${b.toFixed(3)}` : b.toFixed(3);
+
+  // Cursors
+  updateCursors();
+
+  // Canvases
+  if (source === 'lightness' || source === 'slider' || source === 'hex' || source === 'harmony' || source === 'init') {
+    drawChromaPlane();
+  }
+  if (source !== 'lightness') {
+    drawLightnessStrip();
+  }
+
+  // Harmonies
+  updateHarmonies();
+}
+
+function updateCursors() {
+  const { L, a, b } = state;
+  const xPct = (a - A_RANGE[0]) / (A_RANGE[1] - A_RANGE[0]);
+  const yPct = 1 - (b - B_RANGE[0]) / (B_RANGE[1] - B_RANGE[0]);
+  chromaCursor.style.left = `${xPct * 100}%`;
+  chromaCursor.style.top = `${yPct * 100}%`;
+
+  const lyPct = 1 - L;
+  lightnessCursor.style.top = `${lyPct * 100}%`;
+}
+
+// ===================== Interaction: Chroma Plane =====================
+
+function chromaFromEvent(e) {
+  const rect = chromaWrap.getBoundingClientRect();
+  const x = clamp01((e.clientX - rect.left) / rect.width);
+  const y = clamp01((e.clientY - rect.top) / rect.height);
+  state.a = A_RANGE[0] + x * (A_RANGE[1] - A_RANGE[0]);
+  state.b = B_RANGE[1] - y * (B_RANGE[1] - B_RANGE[0]);
+  updateAll('chroma');
+}
+
+let chromaDragging = false;
+chromaWrap.addEventListener('pointerdown', e => { chromaDragging = true; chromaWrap.setPointerCapture(e.pointerId); chromaFromEvent(e); });
+chromaWrap.addEventListener('pointermove', e => { if (chromaDragging) chromaFromEvent(e); });
+chromaWrap.addEventListener('pointerup', () => { chromaDragging = false; });
+
+// ===================== Interaction: Lightness Strip =====================
+
+function lightnessFromEvent(e) {
+  const rect = lightnessWrap.getBoundingClientRect();
+  const y = clamp01((e.clientY - rect.top) / rect.height);
+  state.L = 1 - y;
+  updateAll('lightness');
+}
+
+let lightnessDragging = false;
+lightnessWrap.addEventListener('pointerdown', e => { lightnessDragging = true; lightnessWrap.setPointerCapture(e.pointerId); lightnessFromEvent(e); });
+lightnessWrap.addEventListener('pointermove', e => { if (lightnessDragging) lightnessFromEvent(e); });
+lightnessWrap.addEventListener('pointerup', () => { lightnessDragging = false; });
+
+// ===================== Sliders =====================
+
+function onSliderInput() {
+  state.L = parseFloat(sliderL.value);
+  state.a = parseFloat(sliderA.value);
+  state.b = parseFloat(sliderB.value);
+  updateAll('slider');
+}
+
+sliderL.addEventListener('input', onSliderInput);
+sliderA.addEventListener('input', onSliderInput);
+sliderB.addEventListener('input', onSliderInput);
+
+// ===================== Hex Input =====================
+
+hexInput.addEventListener('input', () => {
+  const rgb = hexToRgb(hexInput.value);
+  if (rgb) {
+    const [L, a, b] = srgbToOklab(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+    state.L = L; state.a = a; state.b = b;
+    suppressHexUpdate = true;
+    updateAll('hex');
+    suppressHexUpdate = false;
+  }
+});
+
+hexInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') hexInput.blur();
+});
+
+// ===================== Copy Values =====================
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 1200);
+}
+
+document.querySelectorAll('.val').forEach(el => {
+  el.addEventListener('click', () => {
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      el.classList.add('copied');
+      showToast('Copied to clipboard');
+      setTimeout(() => el.classList.remove('copied'), 600);
+    });
+  });
+});
+
+// ===================== Harmonies =====================
+
+function getHarmonyColors(mode) {
+  const [L, C, H] = oklabToOklch(state.L, state.a, state.b);
+  let angles;
+  switch (mode) {
+    case 'complement':  angles = [0, 180]; break;
+    case 'triadic':     angles = [0, 120, 240]; break;
+    case 'analogous':   angles = [0, 30, -30, 60]; break;
+    case 'split':       angles = [0, 150, 210]; break;
+    default:            angles = [0, 180];
+  }
+  return angles.map(offset => {
+    const h = (H + offset) % 360;
+    const [nL, nA, nB] = oklchToOklab(L, C, h < 0 ? h + 360 : h);
+    const [r, g, b] = oklabToClampedRgb255(nL, nA, nB);
+    return { L: nL, a: nA, b: nB, hex: `#${rgbToHex(r, g, b)}` };
+  });
+}
+
+function updateHarmonies() {
+  const colors = getHarmonyColors(harmonyMode);
+  harmonySwatches.innerHTML = '';
+  colors.forEach((c, i) => {
+    const div = document.createElement('div');
+    div.className = 'harmony-swatch';
+    div.style.backgroundColor = c.hex;
+    div.title = c.hex;
+    if (i > 0) {
+      div.addEventListener('click', () => {
+        state.L = c.L; state.a = c.a; state.b = c.b;
+        updateAll('harmony');
+      });
+    }
+    harmonySwatches.appendChild(div);
+  });
+}
+
+document.querySelectorAll('.harmony-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.harmony-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    harmonyMode = tab.dataset.mode;
+    updateHarmonies();
+  });
+});
+
+// ===================== Init =====================
+
+initCanvases();
+updateAll('init');
+</script>
+</body>
+</html>
