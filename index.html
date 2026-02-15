@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Color Memory — OKLab Perceptual Challenge</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e10;
+    --surface: #1a1a1e;
+    --surface2: #242428;
+    --border: #2e2e34;
+    --text: #e8e6e3;
+    --text-dim: #706e76;
+    --accent: #c4a882;
+    --accent-dim: #8a7660;
+    --radius: 10px;
+  }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Grain */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ---- Animated color band at the very top ---- */
+  .color-band {
+    height: 3px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      #e63946, #f4a261, #e9c46a, #2a9d8f, #264653,
+      #7209b7, #f72585, #4cc9f0, #80b918, #e63946
+    );
+    background-size: 200% 100%;
+    animation: bandShift 12s linear infinite;
+  }
+
+  @keyframes bandShift {
+    0%   { background-position: 0% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* ---- Hero ---- */
+  .hero {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 100px 32px 80px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hero-eyebrow {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+  }
+
+  .hero h1 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: clamp(48px, 8vw, 80px);
+    line-height: 1.05;
+    letter-spacing: -1.5px;
+    margin-bottom: 28px;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .hero-sub {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.8;
+    max-width: 460px;
+    margin-bottom: 44px;
+  }
+
+  .cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 16px 40px;
+    border-radius: 40px;
+    background: var(--text);
+    color: var(--bg);
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+  }
+
+  .cta:hover { background: #d0cec9; transform: translateY(-1px); }
+
+  .cta svg {
+    width: 16px; height: 16px;
+    transition: transform 0.2s;
+  }
+
+  .cta:hover svg { transform: translateX(3px); }
+
+  /* ---- Animated swatches decoration ---- */
+  .swatch-strip {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 72px;
+    flex-wrap: wrap;
+  }
+
+  .swatch-strip .swatch {
+    width: 48px; height: 48px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    animation: swatchPulse 6s ease-in-out infinite;
+  }
+
+  @keyframes swatchPulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.06); }
+  }
+
+  /* ---- How it works ---- */
+  .how-section {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 32px 80px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .step-number {
+    font-family: 'Instrument Serif', serif;
+    font-size: 32px;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .step-title {
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+
+  .step-desc {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    line-height: 1.65;
+  }
+
+  /* ---- Scoring teaser ---- */
+  .scoring-section {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 32px 80px;
+  }
+
+  .scoring-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 36px 40px;
+    display: flex;
+    align-items: center;
+    gap: 36px;
+  }
+
+  .scoring-graphic {
+    flex-shrink: 0;
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .scoring-graphic .ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 2px dashed var(--border);
+    animation: spinRing 20s linear infinite;
+  }
+
+  @keyframes spinRing { to { transform: rotate(360deg); } }
+
+  .scoring-graphic .inner-dot {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0.8;
+  }
+
+  .scoring-text h3 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  .scoring-text p {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+
+  .scoring-text .delta {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  /* ---- Footer ---- */
+  footer {
+    text-align: center;
+    padding: 0 32px 48px;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+    line-height: 1.7;
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  footer a:hover { text-decoration: underline; }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 600px) {
+    .hero { padding: 64px 20px 56px; }
+    .steps { grid-template-columns: 1fr; gap: 14px; }
+    .scoring-card { flex-direction: column; text-align: center; padding: 28px 24px; }
+    .how-section, .scoring-section { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="color-band"></div>
+
+<!-- Hero -->
+<section class="hero">
+  <span class="hero-eyebrow">OKLab Perceptual Challenge</span>
+  <h1>How well do you <em>see</em> color?</h1>
+  <p class="hero-sub">
+    A color appears for five seconds. When it vanishes, recreate it from memory.
+    Scored on perceptual distance in OKLab space — where numbers match what your eyes actually perceive.
+  </p>
+  <a class="cta" href="oklab-memory-game.html">
+    Play Now
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="8" x2="13" y2="8"/><polyline points="9,4 13,8 9,12"/>
+    </svg>
+  </a>
+
+  <div class="swatch-strip" id="swatchStrip"></div>
+</section>
+
+<!-- How it works -->
+<section class="how-section">
+  <p class="section-label">How it works</p>
+  <div class="steps">
+    <div class="step">
+      <span class="step-number">1</span>
+      <span class="step-title">Observe</span>
+      <p class="step-desc">A random color from the OKLab gamut fills your screen for five seconds. Take it in.</p>
+    </div>
+    <div class="step">
+      <span class="step-number">2</span>
+      <span class="step-title">Recreate</span>
+      <p class="step-desc">The color disappears. Use the perceptual picker to dial in what you remember.</p>
+    </div>
+    <div class="step">
+      <span class="step-number">3</span>
+      <span class="step-title">Score</span>
+      <p class="step-desc">See your original and pick side by side, scored on the true perceptual distance between them.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Scoring -->
+<section class="scoring-section">
+  <div class="scoring-card">
+    <div class="scoring-graphic">
+      <div class="ring"></div>
+      <div class="inner-dot"></div>
+    </div>
+    <div class="scoring-text">
+      <h3>Perceptually honest scoring</h3>
+      <p>
+        Unlike RGB or HSL, OKLab is designed so that equal numerical distances correspond to equal perceived differences.
+        Your score is the Euclidean distance between your pick and the target — a true measure of how close your memory was to reality.
+      </p>
+      <span class="delta">ΔE → Score 0–100</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Built with the <a href="https://bottosson.github.io/posts/oklab/" target="_blank" rel="noopener">OKLab</a> perceptual color space
+</footer>
+
+<script>
+  // Generate the decorative swatch strip with random in-gamut OKLab colors
+  function oklabToLinearSrgb(L, a, b) {
+    const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+    const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+    const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+    const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+    return [
+      +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+    ];
+  }
+  function linearToSrgb(c) { return c >= 0.0031308 ? 1.055 * Math.pow(c, 1/2.4) - 0.055 : 12.92 * c; }
+  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+  function isInGamut(r, g, b) { return r >= -0.002 && r <= 1.002 && g >= -0.002 && g <= 1.002 && b >= -0.002 && b <= 1.002; }
+
+  function randomInGamutHex() {
+    for (let i = 0; i < 500; i++) {
+      const L = 0.3 + Math.random() * 0.45;
+      const a = (Math.random() * 0.5) - 0.25;
+      const b = (Math.random() * 0.5) - 0.25;
+      const [lr, lg, lb] = oklabToLinearSrgb(L, a, b);
+      if (isInGamut(lr, lg, lb)) {
+        const r = Math.round(clamp01(linearToSrgb(lr)) * 255);
+        const g = Math.round(clamp01(linearToSrgb(lg)) * 255);
+        const bl = Math.round(clamp01(linearToSrgb(lb)) * 255);
+        return '#' + [r, g, bl].map(v => v.toString(16).padStart(2, '0')).join('');
+      }
+    }
+    return '#888888';
+  }
+
+  const strip = document.getElementById('swatchStrip');
+  for (let i = 0; i < 9; i++) {
+    const div = document.createElement('div');
+    div.className = 'swatch';
+    div.style.backgroundColor = randomInGamutHex();
+    div.style.animationDelay = `${i * 0.45}s`;
+    strip.appendChild(div);
+  }
+</script>
+</body>
+</html>
